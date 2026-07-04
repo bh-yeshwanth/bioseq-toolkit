@@ -104,4 +104,4 @@ def palindromic(sequence: str) -> bool:
     bool
         True if the sequence is palindromic, False otherwise.
     """
-    return sequence == reverse_complement(sequence):
+    return sequence == reverse_complement(sequence)
