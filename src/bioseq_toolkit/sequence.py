@@ -69,3 +69,39 @@ def reverse_complement(sequence: str) -> str:
     """
     return complement(reverse(sequence))
 
+def nucleotide_count(sequence: str) -> dict:
+    """
+    Count the occurrences of each nucleotide in a biological sequence.
+        Parameters
+    ----------
+    sequence : str
+        Input sequence.
+
+    Returns
+    -------
+    dict
+        Nucleotide counts.
+    """
+    counts = {'A':0,'T':0,'G':0,'C':0}
+    for base in sequence.upper():
+        if base in counts:
+            counts[base] += 1
+        else:
+            raise ValueError(f"Invalid nucleotide '{base}' found.")
+    return counts
+
+def palindromic(sequence: str) -> bool:
+    """
+    Check if a sequence is palindromic.(This checks for a reverse-complement palindrome)
+    
+    Parameters
+    ----------
+    sequence : str
+        Input sequence.
+    
+    Returns
+    -------
+    bool
+        True if the sequence is palindromic, False otherwise.
+    """
+    return sequence == reverse_complement(sequence):
