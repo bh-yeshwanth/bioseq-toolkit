@@ -1,32 +1,35 @@
 # BioSeq Toolkit
-BioSeq Toolkit is a collection of Python scripts implementing fundamental DNA and RNA sequence analysis algorithms from scratch.
-## Current Features
 
-- DNA nucleotide counter
-     Counts the number of A, T, G, and C nucleotides.
-- Reverse DNA sequence
-     Produces the sequence in reverse order.
-- DNA complement
-     Converts each nucleotide to its complementary base (A↔T, C↔G).
+A lightweight Python package for basic DNA/RNA sequence analysis.
+
+> This project was built as part of my journey to learn Python software engineering for computational biology. It is intended as a learning project rather than a replacement for mature libraries such as Biopython.
+
+---
+
+## Features
+
+- Reverse sequence
+- Complement
 - Reverse complement
-     Computes the reverse complement by combining reverse and complement.
-- Longest DNA sequence finder
-     Finds the longest sequence from a list of DNA sequences.
-- Codon count
-     Estimates the number of codons by dividing sequence length by three.
-- Palindrome check
-     Checks whether a sequence is identical to its reverse.
+- Nucleotide counting
+- Palindrome detection
+- DNA → RNA transcription
+- RNA → DNA transcription
 - Hamming distance
-     Counts the number of differing positions between two equal-length DNA sequences.
 - Motif search
-     Searches for occurrences of a motif in a DNA sequence.
-- RNA → DNA conversion
-     Replaces every U with T. 
 
-## Learning Goals
-This Repository is a journey of my python learning process. I will be documenting my progress as I learn python and its applications in bioinformatics. 
+---
 
-## Project Status
+## Installation
 
-🚧 Currently under active development.
+```bash
+git clone https://github.com/bh-yeshwanth/bioseq-toolkit.git
+
+cd bioseq-toolkit
+
+python3 -m venv .venv
+
+source .venv/bin/activate
+
+pip install -e .
 

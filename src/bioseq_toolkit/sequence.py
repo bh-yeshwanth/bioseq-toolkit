@@ -48,9 +48,14 @@ def complement(sequence: str) -> str:
         }
         
     # 4. Building of the complement sequence (returning after the loop completes)
-    complement_seq = ''
+        complement_seq = ""
+
     for base in sequence:
+        if base not in complement_map:
+            raise ValueError(f"Invalid nucleotide '{base}' found.")
+
         complement_seq += complement_map[base]
+
     return complement_seq
 
 def reverse_complement(sequence: str) -> str:
