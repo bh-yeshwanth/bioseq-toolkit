@@ -1,14 +1,20 @@
 """FASTA format parser."""
 
-from bioseq_toolkit.parsers.parser import BaseParser
+from __future__ import annotations
+
+from bioseq_toolkit.parsers.parser import SequenceParser
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bioseq_toolkit.models.sequence import DNASequence
 
 
-class FastaParser(BaseParser):
+class FastaParser(SequenceParser):
     """Parse sequences from a FASTA file."""
 
-    def parse(self, path: str) -> list:
+    def parse(self, path: str) -> "DNASequence":
         """
-        Parse a FASTA file.
+        Parse a single-record FASTA file.
 
         Parameters
         ----------
@@ -17,7 +23,26 @@ class FastaParser(BaseParser):
 
         Returns
         -------
-        list
-            List of ``(header, sequence)`` tuples.
+        DNASequence
+
+        Raises
+        ------
+        ParserError
+            If the file is malformed.
+        """
+        ...
+
+    def parse_many(self, path: str) -> list["DNASequence"]:
+        """
+        Parse a multi-record FASTA file.
+
+        Parameters
+        ----------
+        path : str
+            Path to the ``.fasta`` / ``.fa`` file.
+
+        Returns
+        -------
+        list[DNASequence]
         """
         ...

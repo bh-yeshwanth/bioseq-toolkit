@@ -1,0 +1,16 @@
+LOCUS       pUC19                   2686 bp    DNA     circular SYN 22-MAY-2023
+DEFINITION  Cloning vector pUC19, complete sequence.
+ACCESSION   L09137
+VERSION     L09137.2
+FEATURES             Location/Qualifiers
+     rep_origin      complement(1629..2211)
+                     /note="high-copy-number ColE1/pMB1/pBR322/pUC origin"
+     CDS             complement(1629..2489)
+                     /gene="bla"
+                     /product="beta-lactamase"
+     CDS             149..1210
+                     /gene="lacZ-alpha"
+ORIGIN
+        1 tcgcgcgttt cggtgatgac ggtgaaaacc tctgacacat gcagctcccg gagacggtca
+       61 cagcttgtct gtaagcggat gccgggagca gacaagcccg tcagggcgcg tcagcgggtg
+//

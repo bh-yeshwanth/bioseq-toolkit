@@ -1,91 +1,172 @@
 # Architecture
 
-> **Phase 1 Design Document** — describes the structural decisions behind `bioseq-toolkit`.
+> Describes the structural design of `bioseq-toolkit` and the reasoning behind it.
 
 ---
 
-## Overview
-
-`bioseq-toolkit` is a lightweight Python library for DNA and RNA sequence analysis. It is designed to be simple, readable, and easy to extend — not a replacement for mature libraries like Biopython, but a focused toolkit that prioritises clarity.
+## Layered Architecture
 
 ```
-bioseq-toolkit/
-├── src/
-│   └── bioseq_toolkit/
-│       ├── __init__.py        # Public re-exports
-│       ├── sequence.py        # Core sequence operations
-│       ├── transcription.py   # DNA ↔ RNA conversion
-│       └── comparison.py      # Sequence comparison utilities
-├── tests/
-│   ├── test_sequence.py
-│   ├── test_transcription.py
-│   └── test_comparison.py
-├── docs/
-│   ├── api.md                 # Public API signatures (this phase)
-│   ├── architecture.md        # This file
-│   └── roadmap.md             # Planned work
-└── pyproject.toml
+┌────────────────────────────────────────┐
+│           Domain Model                 │
+│   DNASequence  RNASequence             │
+│   Annotation   Primer  RestrictionSite │
+└──────────────┬─────────────────────────┘
+               │ uses
+┌──────────────▼─────────────────────────┐
+│           Parser Layer                 │
+│   SequenceParser  FastaParser          │
+│   GenBankParser                        │
+└──────────────┬─────────────────────────┘
+               │ produces
+┌──────────────▼─────────────────────────┐
+│         Serializer Layer               │
+│   to_fasta()   to_genbank()            │
+└──────────────┬─────────────────────────┘
+               │ delegates to
+┌──────────────▼─────────────────────────┐
+│            Utilities                   │
+│   gc.py  reverse_complement.py         │
+│   core/sequence.py                     │
+└────────────────────────────────────────┘
 ```
 
 ---
 
-## Design Principles
+## Layer Descriptions
 
-### 1. Functions first, classes later
-The current implementation is entirely function-based. Functions are easier to test in isolation, easier to understand for beginners, and easier to compose. Classes (`DNASequence`, `RNASequence`) are planned for a later phase once the functional core is stable.
+### Domain Model (`models/`, `core/annotation.py`)
 
-### 2. Explicit over implicit
-Every function validates its input and raises a descriptive `ValueError` rather than silently producing wrong results. DNA/RNA auto-detection is performed per-function based on the presence of `T` or `U`.
+The domain model is the primary public surface of the library. It defines
+the biological entities that consumers work with.
 
-### 3. Standard library only
-No third-party runtime dependencies. The package depends only on Python ≥ 3.10 built-ins. This keeps installation trivial and removes version-conflict risk.
+| Class             | Location                        | Description                            |
+|-------------------|---------------------------------|----------------------------------------|
+| `DNASequence`     | `models/sequence.py`            | DNA sequence with topology + metadata. |
+| `RNASequence`     | `models/sequence.py`            | RNA sequence with metadata.            |
+| `Annotation`      | `core/annotation.py`            | A single feature on a sequence.        |
+| `Primer`          | `models/primer.py`              | PCR primer with Tm and GC methods.     |
+| `RestrictionSite` | `models/restriction_site.py`    | Restriction enzyme recognition site.   |
 
-### 4. `src/` layout
-The package lives under `src/bioseq_toolkit/` (not directly at the project root). This is the modern standard layout recommended by PyPA. It prevents accidental import of the source tree instead of the installed package during testing.
-
-### 5. Single public surface via `__init__.py`
-All public functions are re-exported from `bioseq_toolkit/__init__.py`. Consumers import from `bioseq_toolkit` directly; internal module names (`sequence`, `transcription`, `comparison`) are considered implementation detail.
-
----
-
-## Module Responsibilities
-
-| Module           | Responsibility                                           |
-|------------------|----------------------------------------------------------|
-| `sequence.py`    | Low-level string operations on nucleotide sequences      |
-| `transcription.py` | Conversion between DNA and RNA representations         |
-| `comparison.py`  | Pairwise sequence comparison and motif finding           |
+Domain objects delegate their I/O to the parser and serializer layers. They
+do not implement file parsing themselves.
 
 ---
 
-## Error Handling Strategy
+### Parser Layer (`parsers/`)
 
-All validation is done at the boundary of each function:
+Parsers are responsible for reading a file from disk and producing domain
+model objects. All parsers inherit from `SequenceParser`.
 
-- Invalid nucleotide characters → `ValueError`
-- Ambiguous sequence type (both `T` and `U`) → `ValueError`
-- Mismatched sequence lengths (Hamming) → `ValueError`
+```
+parsers/
+├── parser.py       ← SequenceParser ABC
+├── fasta.py        ← FastaParser
+└── genbank.py      ← GenBankParser
+```
 
-No custom exception classes are defined in Phase 1. This will be revisited in Phase 2 if finer-grained error handling is needed.
-
----
-
-## Testing Strategy
-
-Tests live in `tests/` and are run with `pytest`. Each module has a corresponding test file. Tests cover:
-
-- Happy path (valid inputs)
-- Edge cases (empty strings, single characters)
-- Error cases (invalid input, mixed T/U)
+Format auto-detection (choosing the right parser at runtime) is handled by
+`io/detect.py`.
 
 ---
 
-## Future: Class-Based API
+### Serializer Layer (`serializers/`)
 
-Phase 2 will introduce `DNASequence` and `RNASequence` classes. These will wrap the functional core and add:
+Serializers convert domain objects into file format strings. They are
+invoked by `DNASequence.to_fasta()` and `DNASequence.to_genbank()`.
 
-- File I/O (`from_file`, `to_fasta`, `to_genbank`)
-- Rich metadata (`annotations`, `topology`)
-- Chainable operations
+```
+serializers/
+├── fasta.py        ← to_fasta(header, sequence) -> str
+└── genbank.py      ← to_genbank(record) -> str
+```
 
-The functional API will remain available and will be the implementation backbone for the class methods.
+---
+
+### Utilities (`utils/`, `core/sequence.py`)
+
+Low-level string operations that the domain model methods delegate to. These
+are not the primary public API — consumers should prefer the methods on
+`DNASequence` and `RNASequence`.
+
+```
+utils/
+├── gc.py                   ← gc_content()
+└── reverse_complement.py   ← re-exports from core.sequence
+
+core/
+├── sequence.py             ← reverse, complement, nucleotide_count,
+│                             palindromic, dna_to_rna, rna_to_dna,
+│                             hamming_distance, motif_search
+├── enums.py                ← SequenceType, Topology
+├── exceptions.py           ← InvalidNucleotideError, AmbiguousSequenceError,
+│                             SequenceLengthMismatchError
+└── annotation.py           ← Annotation dataclass
+```
+
+---
+
+## Public API Surface
+
+```python
+# What consumers import
+from bioseq_toolkit import (
+    DNASequence,
+    RNASequence,
+    Annotation,
+    Topology,
+    SequenceType,
+    Primer,
+    RestrictionSite,
+    SequenceParser,
+    FastaParser,
+    GenBankParser,
+    InvalidNucleotideError,
+    AmbiguousSequenceError,
+    SequenceLengthMismatchError,
+)
+```
+
+---
+
+## Error Handling
+
+Custom exception classes live in `core/exceptions.py` and all inherit from
+`ValueError` for backwards compatibility. This allows callers to catch either
+the specific subclass or the generic `ValueError`.
+
+| Exception                     | Raised when                              |
+|-------------------------------|------------------------------------------|
+| `InvalidNucleotideError`      | Invalid character in a sequence string.  |
+| `AmbiguousSequenceError`      | Sequence contains both T and U.          |
+| `SequenceLengthMismatchError` | Hamming distance on unequal lengths.     |
+
+---
+
+## Directory Layout
+
+```
+src/bioseq_toolkit/
+├── __init__.py              ← Public API (domain model + parsers + exceptions)
+├── models/
+│   ├── sequence.py          ← DNASequence, RNASequence
+│   ├── primer.py            ← Primer
+│   └── restriction_site.py  ← RestrictionSite
+├── core/
+│   ├── sequence.py          ← Utility functions
+│   ├── annotation.py        ← Annotation
+│   ├── enums.py             ← SequenceType, Topology
+│   └── exceptions.py        ← Custom exceptions
+├── parsers/
+│   ├── parser.py            ← SequenceParser ABC
+│   ├── fasta.py             ← FastaParser
+│   └── genbank.py           ← GenBankParser
+├── serializers/
+│   ├── fasta.py             ← to_fasta()
+│   └── genbank.py           ← to_genbank()
+├── utils/
+│   ├── gc.py                ← gc_content()
+│   └── reverse_complement.py
+└── io/
+    └── detect.py            ← Format auto-detection
+```

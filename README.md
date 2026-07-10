@@ -1,20 +1,99 @@
 # BioSeq Toolkit
 
-A lightweight Python package for basic DNA/RNA sequence analysis.
+A Python toolkit for working with DNA sequences — parsing, analysis, annotation, and serialization.
 
 > This project was built as part of my journey to learn Python software engineering for computational biology. It is intended as a learning project rather than a replacement for mature libraries such as Biopython.
 
 ---
 
-## Features
+## Core Abstractions
 
-- Reverse sequence
-- Complement & reverse complement
-- Nucleotide counting
-- Palindrome detection
-- DNA ↔ RNA transcription
-- Hamming distance
-- Motif search
+| Object            | Description                                                      |
+|-------------------|------------------------------------------------------------------|
+| `DNASequence`     | DNA sequence with topology, annotations list, and metadata.      |
+| `Annotation`      | A single biological feature (gene, CDS, exon, etc.).             |
+| `Topology`        | `LINEAR` or `CIRCULAR`.                                          |
+| `SequenceParser`  | Abstract base for FASTA and GenBank parsers.                     |
+| `FastaParser`     | Parses single and multi-record FASTA files.                      |
+| `GenBankParser`   | Parses GenBank records including FEATURES and metadata.          |
+| `Primer`          | PCR primer with GC content and melting temperature.              |
+| `RestrictionSite` | Restriction enzyme recognition site and cut finder.              |
+
+---
+
+## Quick Look
+
+```python
+from bioseq_toolkit import DNASequence, Topology, Annotation
+
+seq = DNASequence.from_string(
+    "ATGCATGC",
+    topology=Topology.LINEAR,
+    metadata={"name": "test", "organism": "E. coli"},
+)
+
+seq.is_valid()              # True
+seq.gc_content()            # 0.5
+seq.reverse_complement()    # DNASequence("GCATGCAT")
+
+seq.summary()
+# {
+#     "name": "test",
+#     "description": "",
+#     "length": 8,
+#     "gc_content": 0.5,
+#     "topology": "linear",
+#     "annotation_count": 0,
+#     "molecule_type": "DNA",
+# }
+```
+
+```python
+from bioseq_toolkit import DNASequence
+
+seq = DNASequence.from_file("example.fasta")   # format auto-detected
+seq.to_genbank("out.gb")
+```
+
+---
+
+## Error Handling
+
+All errors share a common base class:
+
+```python
+from bioseq_toolkit import BioSeqToolkitError
+
+try:
+    seq = DNASequence.from_file("data.fasta")
+except BioSeqToolkitError as e:
+    print(e)
+```
+
+Full hierarchy:
+
+```
+BioSeqToolkitError
+├── InvalidDNASequence
+├── ParserError
+│   └── UnsupportedSequenceFormat
+├── SerializationError
+└── RestrictionError
+```
+
+---
+
+## Architecture
+
+```
+Domain Model  →  Parser Layer   →  Serializer Layer  →  Utilities
+DNASequence      SequenceParser     to_fasta()            gc_content()
+Annotation       FastaParser        to_genbank()          reverse_complement()
+Primer           GenBankParser
+RestrictionSite
+```
+
+See [`docs/architecture.md`](docs/architecture.md) and [`docs/decisions/`](docs/decisions/) for design rationale.
 
 ---
 
@@ -24,36 +103,32 @@ A lightweight Python package for basic DNA/RNA sequence analysis.
 bioseq-toolkit/
 ├── src/
 │   └── bioseq_toolkit/
-│       ├── __init__.py          # Public API re-exports
-│       ├── core/
-│       │   ├── sequence.py      # All core sequence operations
-│       │   ├── annotation.py    # Annotation dataclass
-│       │   ├── enums.py         # SequenceType, Topology enums
-│       │   └── exceptions.py    # Custom exception classes
-│       ├── parsers/
-│       │   ├── parser.py        # BaseParser ABC
-│       │   ├── fasta.py         # FASTA parser (stub)
-│       │   └── genbank.py       # GenBank parser (stub)
-│       ├── serializers/
-│       │   ├── fasta.py         # FASTA serializer (stub)
-│       │   └── genbank.py       # GenBank serializer (stub)
-│       ├── utils/
-│       │   ├── gc.py            # GC content utility (stub)
-│       │   └── reverse_complement.py
+│       ├── __init__.py          # Public API
 │       ├── models/
-│       │   ├── primer.py        # Primer dataclass (stub)
+│       │   ├── sequence.py      # DNASequence
+│       │   ├── primer.py        # Primer
 │       │   └── restriction_site.py
-│       └── io/
-│           └── detect.py        # File-format auto-detection (stub)
+│       ├── core/
+│       │   ├── sequence.py      # Utility functions
+│       │   ├── annotation.py    # Annotation
+│       │   ├── enums.py         # SequenceType, Topology
+│       │   └── exceptions.py    # BioSeqToolkitError hierarchy
+│       ├── parsers/             # SequenceParser, FastaParser, GenBankParser
+│       ├── serializers/         # to_fasta(), to_genbank()
+│       ├── utils/               # gc_content, reverse_complement
+│       └── io/                  # Format auto-detection
 ├── tests/
+│   ├── data/                    # example.fasta, example.gb, plasmid.gb, ...
 │   ├── test_sequence.py
 │   ├── test_transcription.py
 │   └── test_comparison.py
-├── docs/
-│   ├── api.md                   # Public API signatures (Phase 1 design)
-│   ├── architecture.md          # Structural decisions and principles
-│   └── roadmap.md               # Phased development plan
-└── pyproject.toml
+└── docs/
+    ├── api.md                   # Full API reference
+    ├── architecture.md          # Layered architecture
+    ├── roadmap.md               # Phased development plan
+    └── decisions/
+        ├── 0001-domain-model.md
+        └── 0002-parser-architecture.md
 ```
 
 ---
@@ -70,4 +145,3 @@ python3 -m venv .venv
 source .venv/bin/activate
 
 pip install -e .
-

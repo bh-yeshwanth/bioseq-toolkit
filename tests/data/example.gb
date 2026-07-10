@@ -1,0 +1,17 @@
+LOCUS       NM_001101               5127 bp    mRNA    linear   PRI 12-JAN-2024
+DEFINITION  Homo sapiens actin beta (ACTB), mRNA.
+ACCESSION   NM_001101
+VERSION     NM_001101.5
+FEATURES             Location/Qualifiers
+     gene            1..5127
+                     /gene="ACTB"
+                     /gene_synonym="BRWS1; PS1TP5BP1"
+                     /db_xref="GeneID:60"
+     CDS             203..1384
+                     /gene="ACTB"
+                     /codon_start=1
+                     /product="actin, cytoplasmic 1"
+ORIGIN
+        1 atggatgatg atatcgccgc gctcgtcgtc gacaacggct ccggcatgtg caaagccggc
+       61 ttcgcgggcg acgatgcccc gagggccgtc ttcccctcca tcgtggggcg ccccaggcac
+//

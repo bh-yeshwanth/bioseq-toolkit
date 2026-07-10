@@ -1,0 +1,14 @@
+LOCUS       LAMBDA                  4000 bp    DNA     circular PHG 01-JAN-2024
+DEFINITION  Bacteriophage lambda, partial sequence (circular test fixture).
+ACCESSION   TEST_CIRCULAR
+VERSION     TEST_CIRCULAR.1
+FEATURES             Location/Qualifiers
+     rep_origin      1..100
+                     /note="origin of replication"
+     gene            200..900
+                     /gene="cI"
+                     /note="lambda repressor"
+ORIGIN
+        1 atgaaagcaa ttttcgtact gaaaggtttt gttggttttc ttaaatgcag attcaataga
+       61 atcgcaatgg cggagcttca gcagaacaag aaagcgttaa tggcttcagc agaaaacaag
+//

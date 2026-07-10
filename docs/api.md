@@ -2,314 +2,355 @@
 
 > **Phase 1 Design Document** — signatures only. No implementation details.
 
-This document defines every public function and planned class in `bioseq-toolkit`. It is the authoritative contract for what the library exposes.
+The primary public surface is the **domain model**. Utility functions that
+back the implementation are documented at the end.
 
 ---
 
-## Module: `bioseq_toolkit.sequence`
-
-Functions for manipulating nucleotide sequences.
-
----
-
-### `reverse`
+## `DNASequence`
 
 ```python
-def reverse(sequence: str) -> str:
-    ...
+from bioseq_toolkit import DNASequence
 ```
 
-**Parameters**
+The central domain object. Wraps a DNA nucleotide string together with
+topology, a list of annotations, and structured metadata.
 
-| Name       | Type  | Description      |
-|------------|-------|------------------|
-| `sequence` | `str` | Input sequence.  |
+### Properties
 
-**Returns** `str` — The reversed sequence.
+| Name          | Type              | Description                                          |
+|---------------|-------------------|------------------------------------------------------|
+| `sequence`    | `str`             | Raw nucleotide string (A, T, G, C — uppercase).      |
+| `topology`    | `Topology`        | `LINEAR` or `CIRCULAR`.                              |
+| `annotations` | `list[Annotation]`| Ordered feature annotations. See `Annotation` below. |
+| `metadata`    | `dict[str, str]`  | Record-level metadata. Expected keys below.          |
 
----
+**Metadata keys**
 
-### `complement`
+| Key           | Example                  | Description                       |
+|---------------|--------------------------|-----------------------------------|
+| `accession`   | `"NM_001101"`            | Primary database accession.       |
+| `version`     | `"NM_001101.5"`          | Versioned accession.              |
+| `organism`    | `"Homo sapiens"`         | Source organism.                  |
+| `date`        | `"12-JAN-2024"`          | Record date.                      |
+| `keywords`    | `"actin; cytoskeleton"`  | Semicolon-separated keywords.     |
+| `name`        | `"ACTB"`                 | Short human-readable name.        |
+| `description` | `"Actin, cytoplasmic 1"` | Longer free-text description.     |
+
+### Class Methods
 
 ```python
-def complement(sequence: str) -> str:
-    ...
+@classmethod
+def from_string(cls, sequence: str, **kwargs) -> DNASequence: ...
+#   kwargs: topology, annotations, metadata
+
+@classmethod
+def from_file(cls, path: str | os.PathLike) -> DNASequence: ...
+#   Format auto-detected via io.detect
 ```
 
-Auto-detects DNA (contains `T`) or RNA (contains `U`). Raises `ValueError` if both are present or an invalid nucleotide is found.
-
-**Parameters**
-
-| Name       | Type  | Description                  |
-|------------|-------|------------------------------|
-| `sequence` | `str` | Input DNA or RNA sequence.   |
-
-**Returns** `str` — The complement sequence.
-
-**Raises** `ValueError`
-
----
-
-### `reverse_complement`
+### Validation
 
 ```python
-def reverse_complement(sequence: str) -> str:
-    ...
+def validate(self) -> None: ...
+#   Raises InvalidDNASequence on failure
+
+def is_valid(self) -> bool: ...
+#   Returns True / False without raising
 ```
 
-**Parameters**
-
-| Name       | Type  | Description             |
-|------------|-------|-------------------------|
-| `sequence` | `str` | Input DNA/RNA sequence. |
-
-**Returns** `str` — The reverse complement.
-
-**Raises** `ValueError`
-
----
-
-### `nucleotide_count`
+### Analysis
 
 ```python
-def nucleotide_count(sequence: str) -> dict[str, int]:
-    ...
+def gc_content(self) -> float: ...         # 0.0 – 1.0
+def reverse_complement(self) -> DNASequence: ...
 ```
 
-**Parameters**
-
-| Name       | Type  | Description      |
-|------------|-------|------------------|
-| `sequence` | `str` | Input sequence.  |
-
-**Returns** `dict[str, int]` — Counts keyed by nucleotide (`A`, `T`, `G`, `C`).
-
-**Raises** `ValueError` — On invalid nucleotide.
-
----
-
-### `palindromic`
+### `summary()`
 
 ```python
-def palindromic(sequence: str) -> bool:
-    ...
+def summary(self) -> dict: ...
 ```
 
-Checks for a **reverse-complement palindrome** (biological definition, not string reversal).
-
-**Parameters**
-
-| Name       | Type  | Description      |
-|------------|-------|------------------|
-| `sequence` | `str` | Input sequence.  |
-
-**Returns** `bool` — `True` if the sequence equals its own reverse complement.
-
----
-
-## Module: `bioseq_toolkit.transcription`
-
-Functions for converting between DNA and RNA.
-
----
-
-### `dna_to_rna`
+Returns:
 
 ```python
-def dna_to_rna(sequence: str) -> str:
-    ...
+{
+    "name":             str,    # from metadata["name"] or ""
+    "description":      str,    # from metadata["description"] or ""
+    "length":           int,
+    "gc_content":       float,
+    "topology":         str,    # "linear" | "circular"
+    "annotation_count": int,
+    "molecule_type":    str,    # "DNA"
+}
 ```
 
-Converts a DNA sequence to its RNA transcript by replacing `T` → `U`.
-
-**Parameters**
-
-| Name       | Type  | Description         |
-|------------|-------|---------------------|
-| `sequence` | `str` | Input DNA sequence. |
-
-**Returns** `str` — RNA sequence (uppercase).
-
-**Raises** `ValueError` — If the sequence contains `U`.
-
----
-
-### `rna_to_dna`
+### Export
 
 ```python
-def rna_to_dna(sequence: str) -> str:
-    ...
+def to_fasta(self, path: str | os.PathLike | None = None) -> str: ...
+def to_genbank(self, path: str | os.PathLike | None = None) -> str: ...
 ```
 
-Converts an RNA sequence to DNA by replacing `U` → `T`.
+### Raises
 
-**Parameters**
+| Exception          | When                                         |
+|--------------------|----------------------------------------------|
+| `InvalidDNASequence` | Invalid character or ambiguous molecule type.|
+| `ParserError`      | File is malformed (raised via `from_file`).  |
+| `SerializationError` | Cannot serialize to the target format.     |
 
-| Name       | Type  | Description         |
-|------------|-------|---------------------|
-| `sequence` | `str` | Input RNA sequence. |
-
-**Returns** `str` — DNA sequence (uppercase).
-
-**Raises** `ValueError` — If the sequence contains `T`.
-
----
-
-## Module: `bioseq_toolkit.comparison`
-
-Functions for comparing sequences.
-
----
-
-### `hamming_distance`
+### Example
 
 ```python
-def hamming_distance(sequence1: str, sequence2: str) -> int:
-    ...
+from bioseq_toolkit import DNASequence, Topology
+
+seq = DNASequence.from_string(
+    "ATGCATGC",
+    topology=Topology.LINEAR,
+    metadata={"name": "test", "organism": "E. coli"},
+)
+
+seq.is_valid()              # True
+seq.gc_content()            # 0.5
+seq.reverse_complement()    # DNASequence("GCATGCAT")
+
+seq.summary()
+# {
+#     "name": "test",
+#     "description": "",
+#     "length": 8,
+#     "gc_content": 0.5,
+#     "topology": "linear",
+#     "annotation_count": 0,
+#     "molecule_type": "DNA",
+# }
+
+seq.to_fasta()              # ">test\nATGCATGC\n"
+seq.to_fasta("out.fasta")   # writes file, returns str
 ```
 
-Counts positions where two equal-length sequences differ.
-
-**Parameters**
-
-| Name        | Type  | Description      |
-|-------------|-------|------------------|
-| `sequence1` | `str` | First sequence.  |
-| `sequence2` | `str` | Second sequence. |
-
-**Returns** `int` — Number of differing positions.
-
-**Raises** `ValueError` — If sequences differ in length.
-
 ---
 
-### `motif_search`
+## `Annotation`
 
 ```python
-def motif_search(sequence: str, motif: str) -> list[int]:
-    ...
+from bioseq_toolkit import Annotation
 ```
 
-Finds all (overlapping) occurrences of `motif` within `sequence`.
+A dataclass representing a single biological feature on a sequence.
 
-**Parameters**
+### Fields
 
-| Name       | Type  | Description              |
-|------------|-------|--------------------------|
-| `sequence` | `str` | The sequence to search.  |
-| `motif`    | `str` | The motif to find.       |
+| Name           | Type             | Description                               |
+|----------------|------------------|-------------------------------------------|
+| `feature_type` | `str`            | e.g. `"gene"`, `"CDS"`, `"exon"`.        |
+| `start`        | `int`            | Zero-based start position (inclusive).    |
+| `end`          | `int`            | Zero-based end position (exclusive).      |
+| `strand`       | `int`            | `+1` forward, `-1` reverse. Default `+1`.|
+| `qualifiers`   | `dict[str, str]` | Arbitrary key-value metadata.             |
 
-**Returns** `list[int]` — Zero-based starting indices of every match.
-
----
-
-## Planned Classes (Future Phases)
-
-The following classes are **not yet implemented**. Their signatures are defined here as design targets.
-
----
-
-### `DNASequence`
+### Methods
 
 ```python
-class DNASequence:
+def __len__(self) -> int: ...   # end - start
+```
 
-    # --- Properties ---
+### Example
+
+```python
+from bioseq_toolkit import DNASequence, Annotation
+
+gene = Annotation(
+    feature_type="gene",
+    start=0,
+    end=720,
+    strand=1,
+    qualifiers={"gene": "ACTB"},
+)
+
+seq = DNASequence.from_string(
+    "ATGC" * 180,
+    annotations=[gene],
+)
+seq.summary()["annotation_count"]  # 1
+```
+
+---
+
+## `Topology`
+
+```python
+from bioseq_toolkit import Topology
+```
+
+```python
+class Topology(Enum):
+    LINEAR   = "linear"
+    CIRCULAR = "circular"
+```
+
+---
+
+## `SequenceType`
+
+```python
+from bioseq_toolkit import SequenceType
+```
+
+```python
+class SequenceType(Enum):
+    DNA     = "DNA"
+    RNA     = "RNA"
+    UNKNOWN = "UNKNOWN"
+```
+
+---
+
+## `SequenceParser`
+
+```python
+from bioseq_toolkit import SequenceParser
+```
+
+Abstract base class for all parsers.
+
+```python
+class SequenceParser(ABC):
+
+    @abstractmethod
+    def parse(self, path: str) -> DNASequence: ...
+    #   Single-record parse
+
+    def parse_many(self, path: str) -> list[DNASequence]: ...
+    #   Multi-record parse (default wraps parse())
+```
+
+### Concrete Parsers
+
+| Class           | Format  | Supports `parse_many` |
+|-----------------|---------|-----------------------|
+| `FastaParser`   | FASTA   | Yes (multi-FASTA)     |
+| `GenBankParser` | GenBank | Planned               |
+
+```python
+class FastaParser(SequenceParser):
+    def parse(self, path: str) -> DNASequence: ...
+    def parse_many(self, path: str) -> list[DNASequence]: ...
+
+class GenBankParser(SequenceParser):
+    def parse(self, path: str) -> DNASequence: ...
+```
+
+---
+
+## `Primer`
+
+```python
+from bioseq_toolkit import Primer
+```
+
+```python
+@dataclass
+class Primer:
+    name: str
+    sequence: str
 
     @property
-    def sequence(self) -> str: ...
-
-    @property
-    def annotations(self) -> dict[str, str]: ...
-
-    @property
-    def metadata(self) -> dict[str, str]: ...
-
-    @property
-    def topology(self) -> str: ...          # "linear" | "circular"
-
-    # --- Constructors ---
-
-    @classmethod
-    def from_string(cls, sequence: str, **kwargs) -> "DNASequence": ...
-
-    @classmethod
-    def from_file(cls, path: str) -> "DNASequence": ...
-
-    # --- Export ---
-
-    def to_fasta(self, path: str | None = None) -> str: ...
-
-    def to_genbank(self, path: str | None = None) -> str: ...
-
-    # --- Analysis ---
-
-    def summary(self) -> dict: ...
-
-    def reverse_complement(self) -> "DNASequence": ...
+    def length(self) -> int: ...
 
     def gc_content(self) -> float: ...
+    def melting_temperature(self) -> float: ...
 ```
 
 ---
 
-### `RNASequence`
+## `RestrictionSite`
 
 ```python
-class RNASequence:
+from bioseq_toolkit import RestrictionSite
+```
 
-    # --- Properties ---
+```python
+@dataclass
+class RestrictionSite:
+    enzyme: str
+    recognition_sequence: str
+    cut_position: int
 
-    @property
-    def sequence(self) -> str: ...
-
-    @property
-    def annotations(self) -> dict[str, str]: ...
-
-    @property
-    def metadata(self) -> dict[str, str]: ...
-
-    # --- Constructors ---
-
-    @classmethod
-    def from_string(cls, sequence: str, **kwargs) -> "RNASequence": ...
-
-    @classmethod
-    def from_file(cls, path: str) -> "RNASequence": ...
-
-    # --- Export ---
-
-    def to_fasta(self, path: str | None = None) -> str: ...
-
-    # --- Analysis ---
-
-    def summary(self) -> dict: ...
-
-    def reverse_complement(self) -> "RNASequence": ...
-
-    def gc_content(self) -> float: ...
-
-    # --- Conversion ---
-
-    def to_dna(self) -> "DNASequence": ...
+    def find_in(self, sequence: str) -> list[int]: ...
 ```
 
 ---
 
-### `SequenceComparison`
+## Exceptions
+
+```
+BioSeqToolkitError          ← catch this to handle any library error
+├── InvalidDNASequence      ← invalid nucleotide string
+├── ParserError             ← file cannot be parsed
+│   └── UnsupportedSequenceFormat  ← format not recognised
+├── SerializationError      ← cannot write to target format
+└── RestrictionError        ← restriction site operation failed
+```
 
 ```python
-class SequenceComparison:
-
-    # --- Constructor ---
-
-    def __init__(self, seq1: str, seq2: str) -> None: ...
-
-    # --- Methods ---
-
-    def hamming_distance(self) -> int: ...
-
-    def motif_search(self, motif: str) -> list[int]: ...
-
-    def summary(self) -> dict: ...
+from bioseq_toolkit import (
+    BioSeqToolkitError,
+    InvalidDNASequence,
+    ParserError,
+    UnsupportedSequenceFormat,
+    SerializationError,
+    RestrictionError,
+)
 ```
+
+| Exception                   | `path` attr | `sequence` attr | When raised                         |
+|-----------------------------|-------------|-----------------|-------------------------------------|
+| `InvalidDNASequence`        | —           | ✓               | Bad nucleotide or ambiguous type.   |
+| `ParserError`               | ✓           | —               | Malformed file.                     |
+| `UnsupportedSequenceFormat` | ✓           | —               | Format unrecognised by `io.detect`. |
+| `SerializationError`        | —           | —               | Cannot write to target format.      |
+| `RestrictionError`          | —           | —               | Restriction operation failed.       |
+
+---
+
+## Utility Functions
+
+Low-level string operations used internally. Prefer the methods on
+``DNASequence`` in application code.
+
+```python
+from bioseq_toolkit.core.sequence import (
+    reverse, complement, reverse_complement,
+    nucleotide_count, palindromic,
+    dna_to_rna, rna_to_dna,
+    hamming_distance, motif_search,
+)
+from bioseq_toolkit.utils.gc import gc_content
+```
+
+| Function              | Signature                                     | Returns     |
+|-----------------------|-----------------------------------------------|-------------|
+| `reverse`             | `(sequence: str) -> str`                      | `str`       |
+| `complement`          | `(sequence: str) -> str`                      | `str`       |
+| `reverse_complement`  | `(sequence: str) -> str`                      | `str`       |
+| `nucleotide_count`    | `(sequence: str) -> dict[str, int]`           | `dict`      |
+| `palindromic`         | `(sequence: str) -> bool`                     | `bool`      |
+| `dna_to_rna`          | `(sequence: str) -> str`                      | `str`       |
+| `rna_to_dna`          | `(sequence: str) -> str`                      | `str`       |
+| `hamming_distance`    | `(sequence1: str, sequence2: str) -> int`     | `int`       |
+| `motif_search`        | `(sequence: str, motif: str) -> list[int]`    | `list[int]` |
+| `gc_content`          | `(sequence: str) -> float`                    | `float`     |
+
+---
+
+## Not Yet Implemented
+
+The following are planned but intentionally omitted from v0.x:
+
+- `RNASequence` — planned for v0.3
+- ORF detection
+- Codon translation
+- Restriction site scanning (beyond the `RestrictionSite` model)

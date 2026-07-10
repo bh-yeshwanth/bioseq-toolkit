@@ -6,63 +6,75 @@
 
 ## Phase 1 — API Design ✅
 
-**Goal:** Define the public API before writing implementation.
+**Goal:** Define the public API and architecture before writing implementation.
 
 - [x] Create `docs/` directory
-- [x] Write `architecture.md`
-- [x] Write `api.md` — all public function signatures
-- [x] Define planned class signatures (`DNASequence`, `RNASequence`, `SequenceComparison`)
+- [x] Write `architecture.md` — layered architecture (domain → parser → serializer → utils)
+- [x] Write `api.md` — full API signatures for all public objects
+- [x] Define `DNASequence` with `list[Annotation]`, typed metadata, `validate()`, `summary()`
+- [x] Define `SequenceParser` ABC with `parse() -> DNASequence` and `parse_many()`
+- [x] Define exception hierarchy rooted at `BioSeqToolkitError`
+- [x] Create `tests/data/` with FASTA and GenBank fixtures
+- [x] Write Architecture Decision Records (`docs/decisions/`)
+- [x] Restructure package into `core/`, `models/`, `parsers/`, `serializers/`, `utils/`, `io/`
+
+**Deferred to later phases:**
+- `RNASequence` → v0.3 (no current consumer need)
 
 ---
 
-## Phase 2 — Functional Core
+## Phase 2 — DNASequence Implementation
 
-**Goal:** Implement and test all standalone functions.
+**Goal:** Implement `DNASequence` and all its dependencies.
 
-- [ ] `sequence.py` — `reverse`, `complement`, `reverse_complement`, `nucleotide_count`, `palindromic`
-- [ ] `transcription.py` — `dna_to_rna`, `rna_to_dna`
-- [ ] `comparison.py` — `hamming_distance`, `motif_search`
-- [ ] Full test coverage for all functions
+- [ ] Implement `core/sequence.py` utility functions
+  - [ ] `reverse`, `complement`, `reverse_complement`
+  - [ ] `nucleotide_count`, `palindromic`
+  - [ ] `dna_to_rna`, `rna_to_dna`
+  - [ ] `hamming_distance`, `motif_search`
+- [ ] Implement `utils/gc.py` — `gc_content()`
+- [ ] Implement `DNASequence`
+  - [ ] `from_string()` with validation
+  - [ ] `validate()` and `is_valid()`
+  - [ ] `gc_content()`, `reverse_complement()`, `summary()`
+- [ ] Full test coverage for all utility functions
 - [ ] CI pipeline (GitHub Actions) — run `pytest` on push
 
 ---
 
-## Phase 3 — Class-Based API
+## Phase 3 — Parsers & Serializers
 
-**Goal:** Wrap the functional core in `DNASequence` and `RNASequence` classes.
+**Goal:** Implement file I/O. Every parsed object must pass `validate()`.
 
-- [ ] `DNASequence` class
-  - [ ] `from_string()` constructor
-  - [ ] `from_file()` — FASTA support
-  - [ ] `to_fasta()`, `to_genbank()` export
-  - [ ] `summary()`, `gc_content()`, `reverse_complement()` methods
-  - [ ] `sequence`, `annotations`, `metadata`, `topology` properties
-- [ ] `RNASequence` class
-  - [ ] Mirror of `DNASequence` (minus GenBank, plus `to_dna()`)
-- [ ] `SequenceComparison` class
-  - [ ] Wraps `hamming_distance` and `motif_search`
-  - [ ] `summary()` method
+- [ ] `io/detect.py` — format auto-detection
+- [ ] `parsers/fasta.py` — `FastaParser.parse()` and `parse_many()`
+- [ ] `parsers/genbank.py` — `GenBankParser.parse()` (FEATURES + metadata)
+- [ ] `serializers/fasta.py` — `to_fasta()`
+- [ ] `serializers/genbank.py` — `to_genbank()`
+- [ ] `DNASequence.from_file()` and `to_fasta()` / `to_genbank()` wired up
+- [ ] Parser tests using `tests/data/` fixtures
+- [ ] `RNASequence` (v0.3)
 
 ---
 
 ## Phase 4 — Extended Analysis
 
-**Goal:** Add biologically useful analysis features.
+**Goal:** Add biologically useful features.
 
-- [ ] GC content calculation (`gc_content`)
 - [ ] ORF (Open Reading Frame) detection
-- [ ] Translation — codon → amino acid
-- [ ] Restriction site detection
-- [ ] Basic FASTA multi-record file parsing
+- [ ] Codon → amino acid translation
+- [ ] `RestrictionSite.find_in()` implementation
+- [ ] `Primer.gc_content()` and `Primer.melting_temperature()`
+- [ ] Strand-aware annotation mirroring in `reverse_complement()`
 
 ---
 
 ## Phase 5 — Polish & Publication
 
-**Goal:** Make the package usable by others.
+**Goal:** Make the package production-ready.
 
-- [ ] Full API documentation (auto-generated with `pdoc` or `mkdocs`)
-- [ ] Publish to PyPI
+- [ ] Auto-generated API docs (`pdoc` or `mkdocs`)
 - [ ] `CHANGELOG.md`
 - [ ] `CONTRIBUTING.md`
 - [ ] Semantic versioning (`v1.0.0`)
+- [ ] Publish to PyPI

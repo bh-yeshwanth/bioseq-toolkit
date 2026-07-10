@@ -1,27 +1,75 @@
-class InvalidNucleotideError(ValueError):
-    """Raised when a sequence contains an unrecognised nucleotide character."""
+# ---------------------------------------------------------------------------
+# Root
+# ---------------------------------------------------------------------------
 
-    def __init__(self, nucleotide: str) -> None:
-        super().__init__(f"Invalid nucleotide '{nucleotide}' found.")
-        self.nucleotide = nucleotide
+class BioSeqToolkitError(Exception):
+    """
+    Base class for all bioseq-toolkit errors.
+
+    Downstream applications (e.g. CloneLab) can catch this single class to
+    handle any error raised by the library.
+    """
 
 
-class AmbiguousSequenceError(ValueError):
-    """Raised when a sequence contains both T and U, making the type ambiguous."""
+# ---------------------------------------------------------------------------
+# Sequence errors
+# ---------------------------------------------------------------------------
 
-    def __init__(self) -> None:
+class InvalidDNASequence(BioSeqToolkitError):
+    """
+    Raised when a nucleotide sequence string is invalid.
+
+    Covers both unrecognised characters and ambiguous molecule types
+    (i.e. a string containing both T and U).
+    """
+
+    def __init__(self, message: str, sequence: str = "") -> None:
+        super().__init__(message)
+        self.sequence = sequence
+
+
+# ---------------------------------------------------------------------------
+# Parser errors
+# ---------------------------------------------------------------------------
+
+class ParserError(BioSeqToolkitError):
+    """
+    Raised when a sequence file cannot be parsed.
+
+    Subclass this for format-specific parse failures.
+    """
+
+    def __init__(self, message: str, path: str = "") -> None:
+        super().__init__(message)
+        self.path = path
+
+
+class UnsupportedSequenceFormat(ParserError):
+    """
+    Raised when the file format is not recognised or not supported.
+
+    Returned by ``io.detect`` when format auto-detection fails.
+    """
+
+    def __init__(self, path: str) -> None:
         super().__init__(
-            "Sequence contains both T and U. "
-            "A sequence cannot simultaneously represent DNA and RNA."
+            f"Cannot determine sequence format for file: '{path}'",
+            path=path,
         )
 
 
-class SequenceLengthMismatchError(ValueError):
-    """Raised when two sequences are required to be the same length but are not."""
+# ---------------------------------------------------------------------------
+# Serializer errors
+# ---------------------------------------------------------------------------
 
-    def __init__(self, len1: int, len2: int) -> None:
-        super().__init__(
-            f"Sequences must be of equal length, got {len1} and {len2}."
-        )
-        self.len1 = len1
-        self.len2 = len2
+class SerializationError(BioSeqToolkitError):
+    """Raised when a domain object cannot be serialized to a file format."""
+
+
+# ---------------------------------------------------------------------------
+# Restriction errors
+# ---------------------------------------------------------------------------
+
+class RestrictionError(BioSeqToolkitError):
+    """Raised during restriction site search or cut operations."""
+
