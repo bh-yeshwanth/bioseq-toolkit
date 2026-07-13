@@ -1,7 +1,8 @@
 """
 Domain model for biological sequences.
 
-``DNASequence`` is the primary public object of bioseq-toolkit.
+``DNASequence`` is the canonical object in bioseq-toolkit.
+Nothing else stores DNA.
 
 Note
 ----
@@ -12,79 +13,92 @@ keep the initial API surface small and focused on CloneLab's requirements.
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass, field
+
 from bioseq_toolkit.core.enums import Topology
 from bioseq_toolkit.core.annotation import Annotation
+from bioseq_toolkit.core.exceptions import InvalidDNASequence, SerializationError
 
 
-# ---------------------------------------------------------------------------
-# DNASequence
-# ---------------------------------------------------------------------------
+# Valid IUPAC nucleotides accepted by validate().
+# N (unknown base) is permitted for real-world sequences from databases.
+_VALID_DNA_CHARS: frozenset[str] = frozenset("ATGCN")
 
+
+@dataclass
 class DNASequence:
     """
-    Represents a DNA sequence with topology, annotations, and metadata.
+    Canonical representation of a DNA sequence record.
 
-    This is the central domain object in bioseq-toolkit. All sequence
-    operations are available as methods. File I/O is delegated to the
-    parser and serializer layers, invoked via :meth:`from_file`,
-    :meth:`to_fasta`, and :meth:`to_genbank`.
+    ``DNASequence`` is the central domain object in bioseq-toolkit.
+    All sequence operations are available as methods. File I/O is
+    delegated to the parser and serializer layers, invoked via
+    :meth:`from_file`, :meth:`to_fasta`, and :meth:`to_genbank`.
 
     Parameters
     ----------
     sequence : str
-        Raw nucleotide string (A, T, G, C). Case-insensitive; stored uppercase.
+        Raw nucleotide string (A, T, G, C, N). Stored uppercase.
+    name : str
+        Short human-readable identifier (e.g. ``"ACTB"``).
+    description : str
+        Longer free-text description (e.g. ``"Homo sapiens actin beta"``).
     topology : Topology
         ``Topology.LINEAR`` (default) or ``Topology.CIRCULAR``.
+    molecule_type : str
+        Always ``"DNA"`` for this class.
     annotations : list[Annotation]
-        Ordered list of biological feature annotations. Defaults to ``[]``.
+        Ordered biological feature annotations. Defaults to ``[]``.
     metadata : dict[str, str]
-        Record-level metadata. Expected keys:
-
-        - ``"accession"`` — primary database accession (e.g. ``"NM_001101"``).
-        - ``"version"``   — versioned accession (e.g. ``"NM_001101.5"``).
-        - ``"organism"``  — source organism (e.g. ``"Homo sapiens"``).
-        - ``"date"``      — record date (e.g. ``"12-JAN-2024"``).
-        - ``"keywords"``  — semicolon-separated keywords.
-        - ``"name"``      — short human-readable name.
-        - ``"description"`` — longer free-text description.
-
-        Unknown keys are accepted and preserved.
+        Additional record-level metadata. Expected keys:
+        ``accession``, ``version``, ``organism``, ``date``, ``keywords``.
 
     Examples
     --------
-    >>> seq = DNASequence.from_string("ATGCATGC")
+    >>> seq = DNASequence.from_string("ATGCATGC", name="test")
     >>> seq.gc_content()
     0.5
     >>> seq.reverse_complement().sequence
     'GCATGCAT'
     >>> seq.is_valid()
     True
+    >>> seq.summary()["molecule_type"]
+    'DNA'
     """
 
+    sequence: str
+    name: str = ""
+    description: str = ""
+    topology: Topology = Topology.LINEAR
+    molecule_type: str = "DNA"
+    annotations: list[Annotation] = field(default_factory=list)
+    metadata: dict[str, str] = field(default_factory=dict)
+
     # ------------------------------------------------------------------
-    # Construction
+    # Post-init normalisation
     # ------------------------------------------------------------------
 
-    def __init__(
-        self,
-        sequence: str,
-        topology: Topology = Topology.LINEAR,
-        annotations: list[Annotation] | None = None,
-        metadata: dict[str, str] | None = None,
-    ) -> None:
-        ...
+    def __post_init__(self) -> None:
+        # Normalise sequence to uppercase on construction.
+        self.sequence = self.sequence.upper()
+
+    # ------------------------------------------------------------------
+    # Alternative constructors
+    # ------------------------------------------------------------------
 
     @classmethod
     def from_string(cls, sequence: str, **kwargs) -> "DNASequence":
         """
-        Construct a ``DNASequence`` from a raw nucleotide string.
+        Construct a validated ``DNASequence`` from a raw nucleotide string.
 
         Parameters
         ----------
         sequence : str
-            Nucleotide string (A, T, G, C). Case-insensitive.
+            Nucleotide string (A, T, G, C, N). Case-insensitive.
         **kwargs
-            Optional: ``topology``, ``annotations``, ``metadata``.
+            Optional keyword arguments forwarded to the constructor:
+            ``name``, ``description``, ``topology``, ``annotations``,
+            ``metadata``, ``molecule_type``.
 
         Returns
         -------
@@ -93,18 +107,20 @@ class DNASequence:
         Raises
         ------
         InvalidDNASequence
-            If the sequence contains an invalid or ambiguous character.
+            If the sequence is empty or contains invalid characters.
         """
-        ...
+        obj = cls(sequence=sequence, **kwargs)
+        obj.validate()
+        return obj
 
     @classmethod
     def from_file(cls, path: str | os.PathLike) -> "DNASequence":
         """
         Construct a ``DNASequence`` by parsing a sequence file.
 
-        Format is auto-detected from the file extension and content via
-        ``io.detect``. Supports FASTA (``.fasta``, ``.fa``) and GenBank
-        (``.gb``, ``.gbk``).
+        The file format is auto-detected from extension and content.
+        Supported formats: FASTA (``.fasta``, ``.fa``),
+        GenBank (``.gb``, ``.gbk``).
 
         Parameters
         ----------
@@ -124,42 +140,24 @@ class DNASequence:
         ParserError
             If the file is malformed.
         """
-        ...
+        # Lazy imports to avoid circular dependencies at module load time.
+        from bioseq_toolkit.io.detect import detect_format
+        from bioseq_toolkit.parsers.fasta import FastaParser
+        from bioseq_toolkit.parsers.genbank import GenBankParser
 
-    # ------------------------------------------------------------------
-    # Properties
-    # ------------------------------------------------------------------
+        str_path = str(path)
 
-    @property
-    def sequence(self) -> str:
-        """The raw nucleotide string (uppercase)."""
-        ...
+        if not os.path.exists(str_path):
+            raise FileNotFoundError(f"No such file: '{str_path}'")
 
-    @property
-    def topology(self) -> Topology:
-        """Whether the molecule is ``LINEAR`` or ``CIRCULAR``."""
-        ...
+        fmt = detect_format(str_path)
 
-    @property
-    def annotations(self) -> list[Annotation]:
-        """
-        Ordered list of biological feature annotations.
-
-        Each item is an :class:`~bioseq_toolkit.core.annotation.Annotation`
-        with ``feature_type``, ``start``, ``end``, ``strand``, and
-        ``qualifiers``.
-        """
-        ...
-
-    @property
-    def metadata(self) -> dict[str, str]:
-        """
-        Record-level metadata.
-
-        Expected keys: ``accession``, ``version``, ``organism``, ``date``,
-        ``keywords``, ``name``, ``description``. Unknown keys are preserved.
-        """
-        ...
+        parser_map = {
+            "fasta": FastaParser,
+            "genbank": GenBankParser,
+        }
+        parser = parser_map[fmt]()
+        return parser.parse(str_path)
 
     # ------------------------------------------------------------------
     # Validation
@@ -169,34 +167,51 @@ class DNASequence:
         """
         Validate the sequence and raise on the first problem found.
 
-        Checks performed:
-
-        1. All characters are valid DNA nucleotides (A, T, G, C).
-        2. The sequence is not empty.
+        Checks
+        ------
+        1. Sequence is not empty.
+        2. All characters are valid IUPAC DNA nucleotides (A, T, G, C, N).
 
         Raises
         ------
         InvalidDNASequence
-            If any validation check fails.
         """
-        ...
+        if not self.sequence:
+            raise InvalidDNASequence(
+                "Sequence cannot be empty.",
+                sequence=self.sequence,
+            )
+        invalid = set(self.sequence) - _VALID_DNA_CHARS
+        if invalid:
+            raise InvalidDNASequence(
+                f"Invalid nucleotide(s) found: {', '.join(sorted(invalid))}",
+                sequence=self.sequence,
+            )
 
     def is_valid(self) -> bool:
         """
         Return ``True`` if the sequence passes all validation checks.
 
-        Equivalent to calling :meth:`validate` and catching
-        :exc:`~bioseq_toolkit.core.exceptions.InvalidDNASequence`.
+        Does not raise — catches :exc:`InvalidDNASequence` internally.
 
         Returns
         -------
         bool
         """
-        ...
+        try:
+            self.validate()
+            return True
+        except InvalidDNASequence:
+            return False
 
     # ------------------------------------------------------------------
     # Analysis
     # ------------------------------------------------------------------
+
+    @property
+    def length(self) -> int:
+        """Number of bases in the sequence."""
+        return len(self.sequence)
 
     def gc_content(self) -> float:
         """
@@ -208,20 +223,31 @@ class DNASequence:
             Fraction of bases that are G or C (0.0 – 1.0).
             Returns ``0.0`` for an empty sequence.
         """
-        ...
+        from bioseq_toolkit.utils.gc import gc_content
+        return gc_content(self.sequence)
 
     def reverse_complement(self) -> "DNASequence":
         """
         Return the reverse complement as a new ``DNASequence``.
 
-        Topology and metadata are preserved. Annotations are not
-        transformed (strand-aware annotation mirroring is a Phase 4 feature).
+        Topology, name, and metadata are preserved.
+        Annotations are *not* strand-mirrored (Phase 4 feature).
 
         Returns
         -------
         DNASequence
         """
-        ...
+        from bioseq_toolkit.core.sequence import reverse_complement as _rc
+
+        return DNASequence(
+            sequence=_rc(self.sequence),
+            name=self.name,
+            description=f"reverse complement of {self.name}" if self.name else "",
+            topology=self.topology,
+            molecule_type=self.molecule_type,
+            annotations=[],  # strand-aware mirroring deferred to Phase 4
+            metadata=dict(self.metadata),
+        )
 
     def summary(self) -> dict:
         """
@@ -240,7 +266,15 @@ class DNASequence:
                 "molecule_type": str,
             }``
         """
-        ...
+        return {
+            "name": self.name,
+            "description": self.description,
+            "length": self.length,
+            "gc_content": self.gc_content(),
+            "topology": self.topology.value,
+            "annotation_count": len(self.annotations),
+            "molecule_type": self.molecule_type,
+        }
 
     # ------------------------------------------------------------------
     # Export
@@ -265,7 +299,24 @@ class DNASequence:
         SerializationError
             If the record cannot be serialized.
         """
-        ...
+        from bioseq_toolkit.serializers.fasta import to_fasta as _to_fasta
+
+        try:
+            header = self.name or "sequence"
+            if self.description:
+                header = f"{header} {self.description}"
+            result = _to_fasta(header, self.sequence)
+        except Exception as exc:
+            raise SerializationError(f"FASTA serialization failed: {exc}") from exc
+
+        if path is not None:
+            try:
+                with open(path, "w", encoding="utf-8") as fh:
+                    fh.write(result)
+            except OSError as exc:
+                raise SerializationError(f"Could not write FASTA file: {exc}") from exc
+
+        return result
 
     def to_genbank(self, path: str | os.PathLike | None = None) -> str:
         """
@@ -286,15 +337,33 @@ class DNASequence:
         SerializationError
             If the record cannot be serialized.
         """
-        ...
+        from bioseq_toolkit.serializers.genbank import to_genbank as _to_genbank
+
+        try:
+            result = _to_genbank(self)
+        except Exception as exc:
+            raise SerializationError(f"GenBank serialization failed: {exc}") from exc
+
+        if path is not None:
+            try:
+                with open(path, "w", encoding="utf-8") as fh:
+                    fh.write(result)
+            except OSError as exc:
+                raise SerializationError(f"Could not write GenBank file: {exc}") from exc
+
+        return result
 
     # ------------------------------------------------------------------
     # Dunder
     # ------------------------------------------------------------------
 
     def __len__(self) -> int:
-        """Return the length of the sequence."""
-        ...
+        return len(self.sequence)
 
     def __repr__(self) -> str:
-        ...
+        trunc = self.sequence[:20]
+        suffix = "..." if len(self.sequence) > 20 else ""
+        return (
+            f"DNASequence(name={self.name!r}, length={self.length}, "
+            f"topology={self.topology.value!r}, sequence={trunc!r}{suffix})"
+        )

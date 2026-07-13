@@ -1,5 +1,5 @@
-from bioseq_toolkit import hamming_distance
-from bioseq_toolkit import motif_search
+from bioseq_toolkit.core.sequence import hamming_distance
+from bioseq_toolkit.core.sequence import motif_search
 
 import pytest
 

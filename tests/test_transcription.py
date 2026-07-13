@@ -1,5 +1,5 @@
-from bioseq_toolkit import dna_to_rna
-from bioseq_toolkit import rna_to_dna
+from bioseq_toolkit.core.sequence import dna_to_rna
+from bioseq_toolkit.core.sequence import rna_to_dna
 
 import pytest
 

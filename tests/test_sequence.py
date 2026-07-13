@@ -1,8 +1,8 @@
-from bioseq_toolkit import palindromic
-from bioseq_toolkit import nucleotide_count
-from bioseq_toolkit import reverse_complement
-from bioseq_toolkit import reverse
-from bioseq_toolkit import complement
+from bioseq_toolkit.core.sequence import palindromic
+from bioseq_toolkit.core.sequence import nucleotide_count
+from bioseq_toolkit.core.sequence import reverse_complement
+from bioseq_toolkit.core.sequence import reverse
+from bioseq_toolkit.core.sequence import complement
 
 import pytest
 
