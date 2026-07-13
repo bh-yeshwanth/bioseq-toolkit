@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from bioseq_toolkit.parsers.parser import SequenceParser
+from bioseq_toolkit.parsers.parser import SequenceParser, SourceType, _open_source
 from bioseq_toolkit.core.exceptions import ParserError, InvalidDNASequence
 from bioseq_toolkit.core.enums import Topology
 
@@ -15,16 +15,21 @@ class GenBankParser(SequenceParser):
     Supports the standard GenBank format as produced by NCBI, including
     LOCUS, DEFINITION, ACCESSION, VERSION, SOURCE, FEATURES, and ORIGIN
     sections.
+
+    Both :meth:`parse` and (inherited) :meth:`parse_many` accept either a
+    filesystem path (``str`` or ``os.PathLike``) or a file-like text stream
+    (``io.StringIO``, ``io.TextIOBase``, ``typing.TextIO``).
     """
 
-    def parse(self, path: str) -> "DNASequence":
+    def parse(self, path: SourceType) -> "DNASequence":
         """
-        Parse a single-record GenBank file.
+        Parse a single-record GenBank source.
 
         Parameters
         ----------
-        path : str
-            Path to the ``.gb`` / ``.gbk`` file.
+        path : str, os.PathLike, or TextIO
+            Path to a ``.gb`` / ``.gbk`` file, **or** an open text stream
+            (e.g. ``io.StringIO``) containing GenBank-formatted data.
 
         Returns
         -------
@@ -35,17 +40,22 @@ class GenBankParser(SequenceParser):
         Raises
         ------
         ParserError
-            If the file is malformed or contains no sequence data.
+            If the source is malformed or contains no sequence data.
         """
         # Lazy import avoids circular dependency at module load time.
         from bioseq_toolkit.models.sequence import DNASequence
         from bioseq_toolkit.core.annotation import Annotation
 
+        src_label = "<stream>" if hasattr(path, "read") else str(path)
+
+        fh, should_close = _open_source(path)
         try:
-            with open(path, "r", encoding="utf-8") as fh:
-                content = fh.read()
+            content = fh.read()
         except OSError as exc:
-            raise ParserError(str(exc), path=path) from exc
+            raise ParserError(str(exc), path=src_label) from exc
+        finally:
+            if should_close:
+                fh.close()
 
         # ----------------------------------------------------------------
         # Split into sections at keyword boundaries (columns 0-11)
@@ -171,8 +181,8 @@ class GenBankParser(SequenceParser):
 
         if not sequence:
             raise ParserError(
-                f"No sequence (ORIGIN section) found in '{path}'.",
-                path=path,
+                f"No sequence (ORIGIN section) found in '{src_label}'.",
+                path=src_label,
             )
 
         try:
@@ -186,7 +196,7 @@ class GenBankParser(SequenceParser):
                 metadata=metadata,
             )
         except InvalidDNASequence as exc:
-            raise ParserError(str(exc), path=path) from exc
+            raise ParserError(str(exc), path=src_label) from exc
 
 
 # ---------------------------------------------------------------------------

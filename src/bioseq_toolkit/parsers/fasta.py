@@ -2,21 +2,22 @@
 
 from __future__ import annotations
 
-from bioseq_toolkit.parsers.parser import SequenceParser
+from bioseq_toolkit.parsers.parser import SequenceParser, SourceType, _open_source
 from bioseq_toolkit.core.exceptions import ParserError, InvalidDNASequence
 
 
 class FastaParser(SequenceParser):
-    """Parse sequences from a FASTA file."""
+    """Parse sequences from a FASTA file or text stream."""
 
-    def parse(self, path: str) -> "DNASequence":
+    def parse(self, path: SourceType) -> "DNASequence":
         """
-        Parse the first record from a FASTA file.
+        Parse the first record from a FASTA source.
 
         Parameters
         ----------
-        path : str
-            Path to the ``.fasta`` / ``.fa`` file.
+        path : str, os.PathLike, or TextIO
+            Path to a ``.fasta`` / ``.fa`` file, **or** an open text stream
+            (e.g. ``io.StringIO``) containing FASTA-formatted data.
 
         Returns
         -------
@@ -25,21 +26,26 @@ class FastaParser(SequenceParser):
         Raises
         ------
         ParserError
-            If the file contains no records or is malformed.
+            If the source contains no records or is malformed.
         """
         records = self.parse_many(path)
         if not records:
-            raise ParserError(f"No sequence records found in '{path}'.", path=path)
+            src_label = "<stream>" if hasattr(path, "read") else str(path)
+            raise ParserError(
+                f"No sequence records found in '{src_label}'.",
+                path=src_label,
+            )
         return records[0]
 
-    def parse_many(self, path: str) -> list["DNASequence"]:
+    def parse_many(self, path: SourceType) -> list["DNASequence"]:
         """
-        Parse all records from a (multi-)FASTA file.
+        Parse all records from a (multi-)FASTA source.
 
         Parameters
         ----------
-        path : str
-            Path to the ``.fasta`` / ``.fa`` file.
+        path : str, os.PathLike, or TextIO
+            Path to a ``.fasta`` / ``.fa`` file, **or** an open text stream
+            (e.g. ``io.StringIO``) containing FASTA-formatted data.
 
         Returns
         -------
@@ -48,39 +54,40 @@ class FastaParser(SequenceParser):
         Raises
         ------
         ParserError
-            If the file is malformed or a sequence is invalid.
+            If the source is malformed or a sequence is invalid.
         """
         # Lazy import avoids circular dependency at module load time.
         from bioseq_toolkit.models.sequence import DNASequence
 
+        src_label = "<stream>" if hasattr(path, "read") else str(path)
         records: list[DNASequence] = []
         current_header: str | None = None
         current_seq_parts: list[str] = []
 
+        fh, should_close = _open_source(path)
         try:
-            with open(path, "r", encoding="utf-8") as fh:
-                for lineno, raw_line in enumerate(fh, start=1):
-                    line = raw_line.rstrip("\n")
+            for lineno, raw_line in enumerate(fh, start=1):
+                line = raw_line.rstrip("\n")
 
-                    if line.startswith(">"):
-                        if current_header is not None:
-                            records.append(
-                                self._build(
-                                    current_header,
-                                    "".join(current_seq_parts),
-                                    path,
-                                )
+                if line.startswith(">"):
+                    if current_header is not None:
+                        records.append(
+                            self._build(
+                                current_header,
+                                "".join(current_seq_parts),
+                                src_label,
                             )
-                        current_header = line[1:].strip()
-                        current_seq_parts = []
+                        )
+                    current_header = line[1:].strip()
+                    current_seq_parts = []
 
-                    elif line.strip():
-                        if current_header is None:
-                            raise ParserError(
-                                f"Sequence data before header at line {lineno}.",
-                                path=path,
-                            )
-                        current_seq_parts.append(line.strip())
+                elif line.strip():
+                    if current_header is None:
+                        raise ParserError(
+                            f"Sequence data before header at line {lineno}.",
+                            path=src_label,
+                        )
+                    current_seq_parts.append(line.strip())
 
             # Flush last record
             if current_header is not None:
@@ -88,12 +95,15 @@ class FastaParser(SequenceParser):
                     self._build(
                         current_header,
                         "".join(current_seq_parts),
-                        path,
+                        src_label,
                     )
                 )
 
         except OSError as exc:
-            raise ParserError(str(exc), path=path) from exc
+            raise ParserError(str(exc), path=src_label) from exc
+        finally:
+            if should_close:
+                fh.close()
 
         return records
 
@@ -102,7 +112,7 @@ class FastaParser(SequenceParser):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _build(header: str, sequence: str, path: str) -> "DNASequence":
+    def _build(header: str, sequence: str, src_label: str) -> "DNASequence":
         """Build a validated DNASequence from a parsed header + sequence."""
         from bioseq_toolkit.models.sequence import DNASequence
 
@@ -115,5 +125,5 @@ class FastaParser(SequenceParser):
         except InvalidDNASequence as exc:
             raise ParserError(
                 f"Invalid sequence for record '{name}': {exc}",
-                path=path,
+                path=src_label,
             ) from exc

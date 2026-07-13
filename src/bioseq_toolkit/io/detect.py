@@ -1,20 +1,47 @@
 """File-format and sequence-type auto-detection."""
 
+from __future__ import annotations
+
+import os
+from typing import Union, TYPE_CHECKING
+
 from bioseq_toolkit.core.enums import SequenceType
 from bioseq_toolkit.core.exceptions import UnsupportedSequenceFormat
 
+if TYPE_CHECKING:
+    from typing import TextIO
 
-def detect_format(path: str) -> str:
+# Type alias used in signatures throughout this module.
+_Source = Union[str, "os.PathLike[str]", "TextIO"]
+
+
+def _is_stream(source: _Source) -> bool:
+    """Return True if *source* is a file-like text stream rather than a path."""
+    return hasattr(source, "read")
+
+
+def detect_format(source: _Source) -> str:
     """
-    Infer the file format of a sequence file.
+    Infer the file format of a sequence source.
 
-    Checks the file extension first; falls back to inspecting the first
-    non-whitespace character of the file.
+    Accepts either a filesystem path **or** a file-like text stream.
+
+    When given a **path** (``str`` or ``os.PathLike``):
+
+    1. Checks the file extension first.
+    2. Falls back to reading the first non-whitespace line of the file.
+
+    When given a **stream** (``io.StringIO``, ``io.TextIOBase``, or any
+    ``typing.TextIO``):
+
+    1. Reads the first non-empty line.
+    2. Seeks back to the original position (stream state is preserved).
 
     Parameters
     ----------
-    path : str
-        Path to the sequence file.
+    source : str, os.PathLike, or TextIO
+        Path to a sequence file, or an open text stream whose current
+        position is at (or near) the beginning.
 
     Returns
     -------
@@ -24,8 +51,20 @@ def detect_format(path: str) -> str:
     Raises
     ------
     UnsupportedSequenceFormat
-        If the format cannot be determined.
+        If the format cannot be determined from either the extension or
+        the file contents.
     """
+    if _is_stream(source):
+        return _detect_from_stream(source)  # type: ignore[arg-type]
+    return _detect_from_path(source)  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
+# Private helpers
+# ---------------------------------------------------------------------------
+
+def _detect_from_path(path: "str | os.PathLike[str]") -> str:
+    """Detect format from a filesystem path (extension then content sniff)."""
     path_lower = str(path).lower()
 
     # Extension sniff
@@ -49,6 +88,39 @@ def detect_format(path: str) -> str:
         raise
 
     raise UnsupportedSequenceFormat(str(path))
+
+
+def _detect_from_stream(stream: "TextIO") -> str:
+    """Detect format by sniffing the first non-empty line of *stream*.
+
+    The stream position is restored to where it was before this call.
+    """
+    original_pos: int | None = None
+    try:
+        original_pos = stream.tell()
+    except Exception:
+        # Some streams (e.g. sys.stdin) are not seekable; we try our best.
+        pass
+
+    try:
+        for raw_line in stream:
+            line = raw_line.strip()
+            if line:
+                if line.startswith('>'):
+                    return "fasta"
+                if line.startswith('LOCUS'):
+                    return "genbank"
+                # First non-empty line matched neither sentinel.
+                break
+    finally:
+        # Always attempt to restore position.
+        if original_pos is not None:
+            try:
+                stream.seek(original_pos)
+            except Exception:
+                pass
+
+    raise UnsupportedSequenceFormat("<stream>")
 
 
 def detect_sequence_type(sequence: str) -> SequenceType:

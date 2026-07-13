@@ -14,6 +14,10 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from typing import Union, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import TextIO
 
 from bioseq_toolkit.core.enums import Topology
 from bioseq_toolkit.core.annotation import Annotation
@@ -114,18 +118,23 @@ class DNASequence:
         return obj
 
     @classmethod
-    def from_file(cls, path: str | os.PathLike) -> "DNASequence":
+    def from_file(
+        cls,
+        path: "Union[str, os.PathLike[str], TextIO]",
+    ) -> "DNASequence":
         """
-        Construct a ``DNASequence`` by parsing a sequence file.
+        Construct a ``DNASequence`` by parsing a sequence file or stream.
 
-        The file format is auto-detected from extension and content.
-        Supported formats: FASTA (``.fasta``, ``.fa``),
-        GenBank (``.gb``, ``.gbk``).
+        The file format is auto-detected from the extension (for paths) or
+        the first non-empty line (for streams). Supported formats: FASTA
+        (``.fasta``, ``.fa``) and GenBank (``.gb``, ``.gbk``).
 
         Parameters
         ----------
-        path : str or os.PathLike
-            Path to the sequence file.
+        path : str, os.PathLike, or TextIO
+            Path to the sequence file **or** an open text stream
+            (e.g. ``io.StringIO``, an ``open()`` file handle). When a
+            stream is supplied no temporary file is created on disk.
 
         Returns
         -------
@@ -134,30 +143,45 @@ class DNASequence:
         Raises
         ------
         FileNotFoundError
-            If *path* does not exist.
+            If *path* is a filesystem path that does not exist.
         UnsupportedSequenceFormat
             If the file format cannot be determined.
         ParserError
-            If the file is malformed.
+            If the source is malformed.
+
+        Examples
+        --------
+        From a filesystem path (existing behaviour, unchanged)::
+
+            seq = DNASequence.from_file("example.fasta")
+
+        From an in-memory stream (new in v0.2.1)::
+
+            from io import StringIO
+            fasta = ">MySeq\\nATGCGCGATATAT\\n"
+            seq = DNASequence.from_file(StringIO(fasta))
         """
         # Lazy imports to avoid circular dependencies at module load time.
         from bioseq_toolkit.io.detect import detect_format
         from bioseq_toolkit.parsers.fasta import FastaParser
         from bioseq_toolkit.parsers.genbank import GenBankParser
 
-        str_path = str(path)
+        is_stream = hasattr(path, "read")
 
-        if not os.path.exists(str_path):
-            raise FileNotFoundError(f"No such file: '{str_path}'")
+        if not is_stream:
+            # Path branch: guard against missing files as before.
+            str_path = str(path)
+            if not os.path.exists(str_path):
+                raise FileNotFoundError(f"No such file: '{str_path}'")
 
-        fmt = detect_format(str_path)
+        fmt = detect_format(path)  # type: ignore[arg-type]
 
         parser_map = {
             "fasta": FastaParser,
             "genbank": GenBankParser,
         }
         parser = parser_map[fmt]()
-        return parser.parse(str_path)
+        return parser.parse(path)  # type: ignore[arg-type]
 
     # ------------------------------------------------------------------
     # Validation

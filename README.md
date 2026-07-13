@@ -55,6 +55,59 @@ seq = DNASequence.from_file("example.fasta")   # format auto-detected
 seq.to_genbank("out.gb")
 ```
 
+```python
+# v0.2.1 — parse directly from a pathlib.Path
+from pathlib import Path
+from bioseq_toolkit import DNASequence
+
+seq = DNASequence.from_file(Path("example.fasta"))
+```
+
+---
+
+## Parsing from a Stream (v0.2.1)
+
+`from_file()` now accepts file-like text streams in addition to filesystem paths.
+This lets web applications (e.g. FastAPI) parse uploaded files **without writing
+them to disk**.
+
+```python
+from io import StringIO
+from bioseq_toolkit import DNASequence
+
+fasta = """\
+>Example
+ATGCGCGATATAT
+"""
+
+sequence = DNASequence.from_file(StringIO(fasta))
+print(sequence.summary())
+# {
+#     "name": "Example",
+#     "description": "",
+#     "length": 13,
+#     "gc_content": 0.46...,
+#     "topology": "linear",
+#     "annotation_count": 0,
+#     "molecule_type": "DNA",
+# }
+```
+
+The same works with GenBank streams and any `typing.TextIO`-compatible object
+(e.g. an `open()` file handle, `io.StringIO`, `io.TextIOBase`).
+
+```python
+# FastAPI upload example (no temp file needed)
+from io import StringIO
+from fastapi import UploadFile
+from bioseq_toolkit import DNASequence
+
+async def parse_upload(file: UploadFile) -> dict:
+    text = (await file.read()).decode("utf-8")
+    seq = DNASequence.from_file(StringIO(text))
+    return seq.summary()
+```
+
 ---
 
 ## Error Handling
