@@ -18,6 +18,8 @@ class Annotation:
         ``+1`` for forward strand, ``-1`` for reverse strand.
     qualifiers : dict[str, str]
         Arbitrary key-value metadata (e.g. ``{"gene": "BRCA1"}``).
+    label : str
+        A human-readable label for the annotation. Defaults to ``""``.
     """
 
     feature_type: str
@@ -25,6 +27,8 @@ class Annotation:
     end: int
     strand: int = 1
     qualifiers: dict[str, str] = field(default_factory=dict)
+    label: str = ""
 
     def __len__(self) -> int:
         return self.end - self.start
+

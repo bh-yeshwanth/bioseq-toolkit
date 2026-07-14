@@ -87,6 +87,7 @@ class GenBankParser(SequenceParser):
                     end=end,
                     strand=strand,
                     qualifiers=dict(current_qualifiers),
+                    label=_resolve_label(current_qualifiers),
                 )
             )
             current_feature_type = ""
@@ -197,6 +198,22 @@ class GenBankParser(SequenceParser):
             )
         except InvalidDNASequence as exc:
             raise ParserError(str(exc), path=src_label) from exc
+
+
+def _resolve_label(qualifiers: dict[str, str]) -> str:
+    """
+    Resolve the preferred human-readable label for a GenBank feature.
+
+    Checks keys in the following priority order:
+    1. "gene"
+    2. "label"
+    3. "product"
+    4. "note"
+    """
+    for key in ("gene", "label", "product", "note"):
+        if key in qualifiers:
+            return qualifiers[key]
+    return ""
 
 
 # ---------------------------------------------------------------------------

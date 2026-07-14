@@ -150,6 +150,7 @@ A dataclass representing a single biological feature on a sequence.
 | `end`          | `int`            | Zero-based end position (exclusive).      |
 | `strand`       | `int`            | `+1` forward, `-1` reverse. Default `+1`.|
 | `qualifiers`   | `dict[str, str]` | Arbitrary key-value metadata.             |
+| `label`        | `str`            | Preferred human-readable label. Default `""`.|
 
 ### Methods
 
@@ -168,6 +169,7 @@ gene = Annotation(
     end=720,
     strand=1,
     qualifiers={"gene": "ACTB"},
+    label="ACTB",
 )
 
 seq = DNASequence.from_string(

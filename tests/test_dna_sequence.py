@@ -275,3 +275,34 @@ class TestRepr:
     def test_repr_truncates_long_sequence(self):
         seq = DNASequence.from_string("A" * 100, name="long")
         assert "..." in repr(seq)
+
+
+# ---------------------------------------------------------------------------
+# Annotation direct creation
+# ---------------------------------------------------------------------------
+
+class TestAnnotationDirect:
+
+    def test_direct_label_assignment(self):
+        ann = Annotation(
+            feature_type="gene",
+            start=10,
+            end=100,
+            strand=-1,
+            qualifiers={"gene": "lacZ"},
+            label="explicit-label",
+        )
+        assert ann.feature_type == "gene"
+        assert ann.start == 10
+        assert ann.end == 100
+        assert ann.strand == -1
+        assert ann.qualifiers == {"gene": "lacZ"}
+        assert ann.label == "explicit-label"
+
+    def test_default_label(self):
+        ann = Annotation(
+            feature_type="CDS",
+            start=0,
+            end=50,
+        )
+        assert ann.label == ""

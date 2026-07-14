@@ -391,3 +391,87 @@ class TestLargeSequenceParsing:
         seq = DNASequence.from_file(str(fasta_path))
         gc = seq.gc_content()
         assert abs(gc - 0.5) < 0.01, f"GC content {gc:.4f} is unexpectedly far from 0.5"
+
+
+# ===========================================================================
+# 7. GenBank Annotation Label Resolution
+# ===========================================================================
+
+class TestGenBankLabelResolution:
+    """Verify that the GenBank parser correctly resolves annotation labels in priority order."""
+
+    def test_resolve_gene(self):
+        from io import StringIO
+        gb_content = """LOCUS       test         8 bp    DNA     linear   SYN 13-JUL-2026
+FEATURES             Location/Qualifiers
+     gene            1..8
+                     /gene="lacZ"
+                     /label="lacZ-label"
+                     /product="beta-galactosidase"
+                     /note="a note"
+ORIGIN
+        1 atgcatgc
+//
+"""
+        seq = DNASequence.from_file(StringIO(gb_content))
+        assert len(seq.annotations) == 1
+        assert seq.annotations[0].label == "lacZ"
+
+    def test_resolve_label(self):
+        from io import StringIO
+        gb_content = """LOCUS       test         8 bp    DNA     linear   SYN 13-JUL-2026
+FEATURES             Location/Qualifiers
+     gene            1..8
+                     /label="lacZ-label"
+                     /product="beta-galactosidase"
+                     /note="a note"
+ORIGIN
+        1 atgcatgc
+//
+"""
+        seq = DNASequence.from_file(StringIO(gb_content))
+        assert len(seq.annotations) == 1
+        assert seq.annotations[0].label == "lacZ-label"
+
+    def test_resolve_product(self):
+        from io import StringIO
+        gb_content = """LOCUS       test         8 bp    DNA     linear   SYN 13-JUL-2026
+FEATURES             Location/Qualifiers
+     gene            1..8
+                     /product="beta-galactosidase"
+                     /note="a note"
+ORIGIN
+        1 atgcatgc
+//
+"""
+        seq = DNASequence.from_file(StringIO(gb_content))
+        assert len(seq.annotations) == 1
+        assert seq.annotations[0].label == "beta-galactosidase"
+
+    def test_resolve_note(self):
+        from io import StringIO
+        gb_content = """LOCUS       test         8 bp    DNA     linear   SYN 13-JUL-2026
+FEATURES             Location/Qualifiers
+     gene            1..8
+                     /note="a note"
+ORIGIN
+        1 atgcatgc
+//
+"""
+        seq = DNASequence.from_file(StringIO(gb_content))
+        assert len(seq.annotations) == 1
+        assert seq.annotations[0].label == "a note"
+
+    def test_resolve_no_match(self):
+        from io import StringIO
+        gb_content = """LOCUS       test         8 bp    DNA     linear   SYN 13-JUL-2026
+FEATURES             Location/Qualifiers
+     gene            1..8
+                     /db_xref="GI:12345"
+ORIGIN
+        1 atgcatgc
+//
+"""
+        seq = DNASequence.from_file(StringIO(gb_content))
+        assert len(seq.annotations) == 1
+        assert seq.annotations[0].label == ""
